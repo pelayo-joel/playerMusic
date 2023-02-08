@@ -4,6 +4,11 @@ import os
 import random
 import eyed3
 
+import tkinter
+from tkinter import filedialog
+import shutil
+
+
 """Whole code for the music player, it uses self-made objects (buttons, sliders, frames, texts) in widgets.py. The idea was to use these objects the same
     way as tkinter's object but with more style options.
     The music player supports: play/pause, skip, previous, mixed mode, auto mode (plays automatically another song), a volume slider, a music time slider, 
@@ -13,6 +18,9 @@ import eyed3
 #Initialize pygame and its mixer
 pygame.init()
 pygame.mixer.init()
+pygame.display.set_caption('My Player')
+pygame.display.set_icon(pygame.image.load(f'images-src/spotify-black.png'))
+
 
 #Creates the different frames (which are Surfaces), it lays out the window which makes it easier for me to work with
 width, height = 550, 720
@@ -54,7 +62,6 @@ for file in os.listdir(musicList+currentArtist):
     if extension in imgExtensions:
         albumCover = os.path.join((musicList+currentArtist), file)
 musicProgress = 0
-print(musicDuration)
 pygame.mixer.music.load(musicPath)
 
 
@@ -66,7 +73,6 @@ def LoadMusic():
     pygame.mixer.music.unload()
 
     musicPath = os.path.join((musicList+currentArtist), activeMusic)
-    print(musicPath)
     musicData = eyed3.load(musicPath)
     title = f"{musicData.tag.album_artist} - {musicData.tag.title}"
     for file in os.listdir(musicList+currentArtist):
@@ -135,7 +141,7 @@ def AutoMode():
 #Skips depending on enabled modes and if we already went back to previously listened musics
 def Skip():
     global activeMusic, musicManager, artistSelector, musicSelector, started, musicProgress, currentArtist
-    if activeMusic not in musicManager["prevMusics"]:
+    if activeMusic not in musicManager["prevMusics"] and activeMusic != "":
         musicManager["prevMusics"].append(activeMusic)
     
     musicProgress = 0
@@ -190,7 +196,7 @@ def PreviousMusic():
         for artist in os.listdir(musicList):
             if activeMusic in os.listdir(musicList+artist):
                 currentArtist = artist
-    
+
     MusicChange()
     WasPlaying()
 
@@ -229,6 +235,42 @@ def WasPlaying():
     else:
         started = False
 
+#Stops the music
+def Stop():
+    global musicProgress, started
+    if playing:
+        playButton.Click()
+        started = False
+    musicProgress = 0
+    LoadMusic()
+
+#Should add a music that should be selected via the os file explorer but hasn't been tested because of askopenfile being buggy
+def AddMusic():
+    root = tkinter.Tk()
+    root.withdraw()
+    file = filedialog.askopenfile(initialdir='Inbox/', title='Select an MP3 file', filetypes=(('mp3 files', '*.mp3'),))
+    fileData = eyed3.load(file)
+    fileArtistAlbum = fileData.tag.album_artist
+    fileArtistAlbum = fileArtistAlbum.replace(" ", "")
+    if fileArtistAlbum not in musicManager["Artists"]:
+        os.mkdir(f"MusicFolder/{fileArtistAlbum}")
+        musicManager["Artists"].append(fileArtistAlbum)
+    os.rename(file, file.replace(" ", ""))
+    shutil.move(file, f"MusicFolder/{fileArtistAlbum}")
+
+#Removes the current music
+def RemoveMusic():
+    global musicManager, activeMusic
+    pygame.mixer.music.stop() 
+    pygame.mixer.music.unload()
+    os.remove(os.path.join((musicList+currentArtist), activeMusic))
+    musicManager["Musics"].remove(activeMusic)
+    if activeMusic in musicManager["prevMusics"]:
+        musicManager["prevMusics"].remove(activeMusic)
+    
+    activeMusic = ""
+    Skip()
+
 #Enables the different elements, needed to make them usable since they need to be checked every frame, used in pygame's mainloop
 def InitGUI():
     ALBUMDISPLAY.ActiveFrame()
@@ -242,6 +284,9 @@ def InitGUI():
     nextButton.ActiveButton()
     modeButton.ActiveButton(buttonClicked="images-src/shuffleOn.png")
     autoButton.ActiveButton(buttonClicked="images-src/autoplayOn.png")
+    stopButton.ActiveButton()
+    addButton.ActiveButton()
+    deleteButton.ActiveButton()
 
 #Creates the different elements for the music player (buttons, sliders, texts) in their respective frames
 albumButton = widgets.Button(ALBUMDISPLAY, 360, 360, centerX=True, centerY=True, imageButton=albumCover, type="OnClick", func=Play)
@@ -254,8 +299,11 @@ volumeSlider = widgets.Slider(CONTROLBUTTONS, 60, 10, "y", thickness=4, pourcent
 playButton = widgets.Button(CONTROLBUTTONS, 80, 80, color=(230, 230, 230), pourcentMode=True, centerX=True, posY=60, borderR=50, buttonLabel="images-src/play.png", func=Play)
 prevButton = widgets.Button(CONTROLBUTTONS, 70, 70, color=(230, 230, 230), pourcentMode=True, posX=30, posY=60, borderR=50, buttonLabel="images-src/backward.png", type="OnClick", func=PreviousMusic)
 nextButton = widgets.Button(CONTROLBUTTONS, 70, 70, color=(230, 230, 230), pourcentMode=True, posX=70, posY=60, borderR=50, buttonLabel="images-src/forward.png", type="OnClick", func=Skip)
-modeButton = widgets.Button(CONTROLBUTTONS, 35, 35, color=(230, 230, 230), pourcentMode=True, posX=60, posY=85, borderR=50, buttonLabel="images-src/shuffleOff.png", func=SkipMode)
-autoButton = widgets.Button(CONTROLBUTTONS, 35, 35, color=(230, 230, 230), pourcentMode=True, posX=40, posY=85, borderR=50, buttonLabel="images-src/autoplayOff.png", func=AutoMode)
+modeButton = widgets.Button(CONTROLBUTTONS, 35, 35, color=(230, 230, 230), pourcentMode=True, posX=62, posY=87, borderR=50, buttonLabel="images-src/shuffleOff.png", func=SkipMode)
+autoButton = widgets.Button(CONTROLBUTTONS, 35, 35, color=(230, 230, 230), pourcentMode=True, posX=38, posY=87, borderR=50, buttonLabel="images-src/autoplayOff.png", func=AutoMode)
+stopButton = widgets.Button(CONTROLBUTTONS, 30, 30, color=(230, 230, 230), pourcentMode=True, centerX=True, posY=87, borderR=50, buttonLabel="images-src/stop-button.png", type="OnClick", func=Stop)
+addButton = widgets.Button(CONTROLBUTTONS, 30, 30, color=(230, 230, 230), pourcentMode=True, posX=84, posY=52, borderR=50, buttonLabel="images-src/plus.png", type="OnClick", func=AddMusic)
+deleteButton = widgets.Button(CONTROLBUTTONS, 30, 30, color=(230, 230, 230), pourcentMode=True, posX=84, posY=68, borderR=50, buttonLabel="images-src/minus.png", type="OnClick", func=RemoveMusic)
 
 pygame.display.flip()
 
@@ -266,7 +314,7 @@ pygame.display.flip()
 #The program itself and Pygame's mainloop
 if __name__ == "__main__":
     running = True
-    while running: 
+    while running:
         setVolume = 10 * (volumeSlider.GetSlideValue()/100)
         InitGUI()
         
